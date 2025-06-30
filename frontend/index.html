@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>3D Globe + News</title>
+  <style>
+    body { margin: 0; overflow: hidden; font-family: sans-serif; }
+    #sidebar {
+      position: absolute;
+      top: 0; right: 0;
+      width: 300px; height: 100%;
+      background: rgba(255,255,255,0.95);
+      padding: 1em; overflow-y: auto;
+      box-shadow: -2px 0 5px rgba(0,0,0,0.3);
+    }
+    canvas { display: block; }
+    .article h3 { margin: 0 0 .2em; font-size: 1em; }
+    .article p  { margin: 0; font-size: .9em; color: #444; }
+  </style>
+</head>
+<body>
+
+  <div id="sidebar">
+    <h2>Click the globe</h2>
+    <p>Coordinates &amp; news will appear here.</p>
+  </div>
+
+  <!-- Three.js r147 UMD build -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+  <!-- OrbitControls for r147 -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    // ─── Basic Three.js Scene Setup ─────────────────────────────────────────
+    console.clear();
+    console.log('✅ THREE r' + THREE.REVISION + ' loaded');
+
+    var scene    = new THREE.Scene();
+    var camera   = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 3);
+
+    var renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 1));
+
+    // ─── Load & Add Earth Globe ─────────────────────────────────────────────
+    new THREE.TextureLoader().load(
+      'https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Equirectangular_projection_SW.jpg/2048px-Equirectangular_projection_SW.jpg',
+      function(texture) {
+        var globe = new THREE.Mesh(
+          new THREE.SphereGeometry(1, 64, 64),
+          new THREE.MeshPhongMaterial({ map: texture })
+        );
+        scene.add(globe);
+        console.log('🌍 Earth texture applied');
+      },
+      undefined,
+      function(err) { console.error('Texture error:', err); }
+    );
+
+    // ─── OrbitControls ──────────────────────────────────────────────────────
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.1;
+    controls.enableZoom    = true;
+
+    // ─── Render Loop & Resize ───────────────────────────────────────────────
+    (function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    })();
+
+    window.addEventListener('resize', function() {
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+
+  <!-- ─── News Fetch Logic ───────────────────────────────────────────────── -->
+  <script src="js/fetchNews.js"></script>
+  <script>
+    // Raycaster & click → lat/lon → fetchNews()
+    var raycaster = new THREE.Raycaster();
+    var mouse     = new THREE.Vector2();
+
+    renderer.domElement.addEventListener('click', function(event) {
+      var rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width)  * 2 - 1;
+      mouse.y = -((event.clientY - rect.top)  / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      var hits = raycaster.intersectObjects(scene.children, true);
+      if (!hits.length) return;
+
+      var pt  = hits[0].point;
+      var r   = Math.sqrt(pt.x*pt.x + pt.y*pt.y + pt.z*pt.z);
+      var lat = Math.asin(pt.y / r) * (180/Math.PI);
+      var lon = Math.atan2(pt.z, pt.x) * (180/Math.PI);
+
+      // call the function defined in fetchNews.js
+      window.fetchNews(lat, lon);
+    });
+  </script>
+
+</body>
+</html>
