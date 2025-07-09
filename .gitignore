@@ -9,5 +9,3 @@ dist/
 # Editor / OS
 .vscode/
 .DS_Store
-
-.env
