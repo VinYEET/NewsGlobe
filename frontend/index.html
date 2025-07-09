@@ -6,8 +6,7 @@
   <style>
     body { margin: 0; overflow: hidden; font-family: sans-serif; }
     #sidebar {
-      position: absolute;
-      top: 0; right: 0;
+      position: absolute; top: 0; right: 0;
       width: 300px; height: 100%;
       background: rgba(255,255,255,0.95);
       padding: 1em; overflow-y: auto;
@@ -25,54 +24,52 @@
     <p>Coordinates &amp; news will appear here.</p>
   </div>
 
-  <!-- Three.js r147 UMD build -->
+  <!-- Three.js & OrbitControls (r147) -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
-  <!-- OrbitControls for r147 -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-    // ─── Basic Three.js Scene Setup ─────────────────────────────────────────
     console.clear();
     console.log('✅ THREE r' + THREE.REVISION + ' loaded');
 
+    // 1) Scene, camera, renderer
     var scene    = new THREE.Scene();
     var camera   = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
     camera.position.set(0, 0, 3);
-
     var renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
-
     scene.add(new THREE.AmbientLight(0xffffff, 1));
 
-    // ─── Load & Add Earth Globe ─────────────────────────────────────────────
+    // 2) Load the official Three.js texture
     new THREE.TextureLoader().load(
-      'https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Equirectangular_projection_SW.jpg/2048px-Equirectangular_projection_SW.jpg',
+      'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
       function(texture) {
         var globe = new THREE.Mesh(
           new THREE.SphereGeometry(1, 64, 64),
           new THREE.MeshPhongMaterial({ map: texture })
         );
+        // Rotate −90° so prime meridian (0°) faces the camera/front
+        globe.rotation.y = -Math.PI / 2;
         scene.add(globe);
-        console.log('🌍 Earth texture applied');
+        console.log('🌍 Earth texture applied, rotated -90°');
       },
       undefined,
-      function(err) { console.error('Texture error:', err); }
+      function(err) { console.error('Texture failed to load:', err); }
     );
 
-    // ─── OrbitControls ──────────────────────────────────────────────────────
+    // 3) OrbitControls
     var controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
     controls.enableZoom    = true;
 
-    // ─── Render Loop & Resize ───────────────────────────────────────────────
+    // 4) Render loop + resize
     (function animate() {
       requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
     })();
-
     window.addEventListener('resize', function() {
       camera.aspect = window.innerWidth/window.innerHeight;
       camera.updateProjectionMatrix();
@@ -80,28 +77,37 @@
     });
   </script>
 
-  <!-- ─── News Fetch Logic ───────────────────────────────────────────────── -->
+  <!-- News fetching logic -->
   <script src="js/fetchNews.js"></script>
   <script>
-    // Raycaster & click → lat/lon → fetchNews()
     var raycaster = new THREE.Raycaster();
     var mouse     = new THREE.Vector2();
 
-    renderer.domElement.addEventListener('click', function(event) {
+    renderer.domElement.addEventListener('click', function(e) {
       var rect = renderer.domElement.getBoundingClientRect();
-      mouse.x = ((event.clientX - rect.left) / rect.width)  * 2 - 1;
-      mouse.y = -((event.clientY - rect.top)  / rect.height) * 2 + 1;
+      mouse.x = ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+      mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
 
       var hits = raycaster.intersectObjects(scene.children, true);
       if (!hits.length) return;
 
-      var pt  = hits[0].point;
-      var r   = Math.sqrt(pt.x*pt.x + pt.y*pt.y + pt.z*pt.z);
-      var lat = Math.asin(pt.y / r) * (180/Math.PI);
-      var lon = Math.atan2(pt.z, pt.x) * (180/Math.PI);
+      var p = hits[0].point;
+      var r = Math.sqrt(p.x*p.x + p.y*p.y + p.z*p.z);
 
-      // call the function defined in fetchNews.js
+      // latitude
+      var lat = Math.asin(p.y / r) * (180/Math.PI);
+
+      // raw longitude from x/z
+      var rawLon = Math.atan2(p.z, p.x) * (180/Math.PI);
+
+      // adjust for the -90° rotation: add 90°
+      var lon = rawLon + 90;
+      // normalize into [-180,180]
+      if (lon > 180) lon -= 360;
+      if (lon < -180) lon += 360;
+
+      console.log(`Computed → lat: ${lat.toFixed(2)}, lon: ${lon.toFixed(2)}`);
       window.fetchNews(lat, lon);
     });
   </script>

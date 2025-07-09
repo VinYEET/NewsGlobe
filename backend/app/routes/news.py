@@ -12,10 +12,11 @@ class Article(BaseModel):
     url:   str
     source:str
 
-class NewsResponse(BaseModel):
+class NewsWithCountry(BaseModel):
+    country: str
     articles: List[Article]
-
-@router.get("/", response_model=NewsResponse)
+@router.get("",  response_model=NewsWithCountry)  # handles GET /news
+@router.get("/", response_model=NewsWithCountry)  # handles GET /news/
 async def get_news(
     lat: float = Query(..., description="Latitude"),
     lon: float = Query(..., description="Longitude")
@@ -33,4 +34,5 @@ async def get_news(
         Article(title=a["title"], url=a["url"], source=a["source"])
         for a in raw
     ]
-    return NewsResponse(articles=articles)
+    # return the country code along with the articles
+    return NewsWithCountry(country=country, articles=articles)
